@@ -125,38 +125,51 @@ function drawLabel(
   tex.needsUpdate = true;
 }
 
+function makeDiscTexture() {
+  const cv = document.createElement("canvas");
+  cv.width = 64;
+  cv.height = 64;
+  const ctx = cv.getContext("2d")!;
+  const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, "rgba(255,255,255,1)");
+  g.addColorStop(0.4, "rgba(255,255,255,0.75)");
+  g.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 64, 64);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 function makeEspMesh(role: "transmitter_hub" | "receiver") {
   const g = new THREE.Group();
-  // Breadboard
   const bb = new THREE.Mesh(
-    new THREE.BoxGeometry(0.18, 0.02, 0.12),
-    new THREE.MeshStandardMaterial({ color: 0xe8e4dc, roughness: 0.75, metalness: 0.05 })
+    new THREE.BoxGeometry(0.16, 0.016, 0.1),
+    new THREE.MeshStandardMaterial({ color: 0xe4dfd6, roughness: 0.78, metalness: 0.04 })
   );
-  bb.position.y = 0.01;
+  bb.position.y = 0.008;
   g.add(bb);
-  // PCB
   const pcb = new THREE.Mesh(
-    new THREE.BoxGeometry(0.055, 0.012, 0.028),
+    new THREE.BoxGeometry(0.05, 0.01, 0.026),
     new THREE.MeshStandardMaterial({
       color: 0x1a1e24,
       metalness: 0.45,
       roughness: 0.4,
       emissive: THEME.orange,
-      emissiveIntensity: 0.12,
+      emissiveIntensity: 0.1,
     })
   );
-  pcb.position.set(0, 0.022, 0);
+  pcb.position.set(0, 0.018, 0);
   g.add(pcb);
-  // Antenna
   const ant = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.002, 0.002, 0.055, 6),
+    new THREE.CylinderGeometry(0.0018, 0.0018, 0.05, 6),
     new THREE.MeshStandardMaterial({ color: 0x9a948b, metalness: 0.8, roughness: 0.25 })
   );
-  ant.position.set(0.03, 0.05, 0);
+  ant.position.set(0.028, 0.045, 0);
   g.add(ant);
   if (role === "transmitter_hub") {
     const ant2 = ant.clone();
-    ant2.position.x = -0.03;
+    ant2.position.x = -0.028;
     g.add(ant2);
   }
   return { group: g, pcb };
@@ -200,29 +213,32 @@ export default function RoomScene({ layout, scene }: Props) {
     el.appendChild(renderer.domElement);
 
     const threeScene = new THREE.Scene();
-    threeScene.fog = new THREE.Fog(THEME.canvas, 11, 24);
+    threeScene.fog = new THREE.Fog(THEME.canvas, 13, 26);
 
-    const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 80);
-    camera.position.set(6.2, 5.4, 7.4);
-    camera.lookAt(2, 0.9, -1.5);
+    const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 80);
+    camera.position.set(5.6, 4.5, 6.6);
+    camera.lookAt(2, 0.55, -1.5);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(2, 0.7, -1.5);
+    controls.target.set(2, 0.55, -1.5);
     controls.enableDamping = true;
-    controls.dampingFactor = 0.07;
-    controls.minDistance = 5;
-    controls.maxDistance = 16;
-    controls.maxPolarAngle = Math.PI * 0.43;
+    controls.dampingFactor = 0.08;
+    controls.minDistance = 4.5;
+    controls.maxDistance = 14;
+    controls.maxPolarAngle = Math.PI * 0.42;
     controls.enablePan = false;
     controls.update();
 
-    threeScene.add(new THREE.AmbientLight(0xc4b8a8, 0.42));
-    const key = new THREE.DirectionalLight(0xfff2e0, 0.72);
+    threeScene.add(new THREE.AmbientLight(0xc4b8a8, 0.48));
+    const key = new THREE.DirectionalLight(0xfff2e0, 0.78);
     key.position.set(4, 10, 5);
     threeScene.add(key);
-    const fill = new THREE.DirectionalLight(0xe8722c, 0.12);
+    const fill = new THREE.DirectionalLight(0xe8722c, 0.1);
     fill.position.set(-5, 2, -3);
     threeScene.add(fill);
+    const rim = new THREE.DirectionalLight(0xb8d4c8, 0.08);
+    rim.position.set(0, 3, -8);
+    threeScene.add(rim);
 
     const fb = layout.floor_bounds;
     const fw = fb.max_x - fb.min_x;
@@ -240,21 +256,21 @@ export default function RoomScene({ layout, scene }: Props) {
     floor.position.copy(toThree(cx, cy, 0));
     threeScene.add(floor);
 
-    const grid = new THREE.GridHelper(Math.max(fw, fd), 14, THEME.gridMajor, THEME.gridMinor);
+    const grid = new THREE.GridHelper(Math.max(fw, fd), 12, THEME.gridMajor, THEME.gridMinor);
     grid.position.copy(floor.position);
     const gm = grid.material as THREE.LineBasicMaterial | THREE.LineBasicMaterial[];
     (Array.isArray(gm) ? gm : [gm]).forEach((m) => {
       m.transparent = true;
-      m.opacity = 0.5;
+      m.opacity = 0.28;
     });
     threeScene.add(grid);
 
-    // Room walls (semi-precise enclosure)
+    // Room enclosure — edges only, walls nearly invisible
     const wallMat = new THREE.MeshStandardMaterial({
       color: THEME.wall,
       transparent: true,
-      opacity: 0.22,
-      roughness: 0.9,
+      opacity: 0.07,
+      roughness: 0.95,
       metalness: 0,
       side: THREE.DoubleSide,
       depthWrite: false,
@@ -262,7 +278,7 @@ export default function RoomScene({ layout, scene }: Props) {
     const edgeMat = new THREE.LineBasicMaterial({
       color: THEME.line,
       transparent: true,
-      opacity: 0.7,
+      opacity: 0.55,
     });
     const roomBox = new THREE.BoxGeometry(fw, roomH, fd);
     const roomMesh = new THREE.Mesh(roomBox, wallMat);
@@ -272,42 +288,73 @@ export default function RoomScene({ layout, scene }: Props) {
     roomEdges.position.copy(roomMesh.position);
     threeScene.add(roomEdges);
 
-    // Monitored triangle (geometry only)
+    // Monitored triangle — soft fill + outline
     const poly = layout.monitored_polygon_xy;
-    const triPts = [...poly, poly[0]].map(([x, y]) => toThree(x, y, 0.03));
+    const shape = new THREE.Shape();
+    poly.forEach(([x, y], i) => {
+      const p = toThree(x, y, 0);
+      if (i === 0) shape.moveTo(p.x, -p.z);
+      else shape.lineTo(p.x, -p.z);
+    });
+    shape.closePath();
+    const zone = new THREE.Mesh(
+      new THREE.ShapeGeometry(shape),
+      new THREE.MeshBasicMaterial({
+        color: THEME.orange,
+        transparent: true,
+        opacity: 0.045,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      })
+    );
+    zone.rotation.x = -Math.PI / 2;
+    zone.position.y = 0.02;
+    threeScene.add(zone);
+
+    const triPts = [...poly, poly[0]].map(([x, y]) => toThree(x, y, 0.025));
     threeScene.add(
       new THREE.Line(
         new THREE.BufferGeometry().setFromPoints(triPts),
-        new THREE.LineBasicMaterial({ color: THEME.muted, transparent: true, opacity: 0.5 })
+        new THREE.LineBasicMaterial({ color: THEME.muted, transparent: true, opacity: 0.4 })
       )
     );
 
-    // Edge length labels (meters) — precise layout annotation
+    // Edge length labels — pushed outside the triangle so they don't fight the avatar
+    const cxPoly = poly.reduce((s, p) => s + p[0], 0) / poly.length;
+    const cyPoly = poly.reduce((s, p) => s + p[1], 0) / poly.length;
     for (let i = 0; i < poly.length; i++) {
       const a = poly[i];
       const b = poly[(i + 1) % poly.length];
       const mx = (a[0] + b[0]) / 2;
       const my = (a[1] + b[1]) / 2;
+      const ox = mx - cxPoly;
+      const oy = my - cyPoly;
+      const olen = Math.hypot(ox, oy) || 1;
+      const lx = mx + (ox / olen) * 0.32;
+      const ly = my + (oy / olen) * 0.32;
       const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
       const cv = document.createElement("canvas");
-      cv.width = 96;
-      cv.height = 28;
+      cv.width = 88;
+      cv.height = 26;
       const ctx = cv.getContext("2d")!;
-      ctx.fillStyle = "rgba(15,14,12,0.75)";
-      ctx.fillRect(0, 0, 96, 28);
-      ctx.fillStyle = "#8f887c";
-      ctx.font = "600 14px ui-monospace,Menlo,monospace";
+      ctx.fillStyle = "rgba(15,14,12,0.55)";
+      ctx.beginPath();
+      ctx.roundRect(0, 0, 88, 26, 4);
+      ctx.fill();
+      ctx.fillStyle = "#6e675c";
+      ctx.font = "600 13px ui-monospace,Menlo,monospace";
       ctx.textAlign = "center";
-      ctx.fillText(`${len.toFixed(2)} m`, 48, 19);
+      ctx.fillText(`${len.toFixed(2)} m`, 44, 17);
       const spr = new THREE.Sprite(
         new THREE.SpriteMaterial({
           map: new THREE.CanvasTexture(cv),
           transparent: true,
           depthTest: false,
+          opacity: 0.85,
         })
       );
-      spr.scale.set(0.55, 0.16, 1);
-      spr.position.copy(toThree(mx, my, 0.12));
+      spr.scale.set(0.48, 0.14, 1);
+      spr.position.copy(toThree(lx, ly, 0.08));
       threeScene.add(spr);
     }
 
@@ -343,12 +390,14 @@ export default function RoomScene({ layout, scene }: Props) {
     const field = new THREE.Points(
       fieldGeo,
       new THREE.PointsMaterial({
-        size: 0.16,
+        size: 0.2,
+        map: makeDiscTexture(),
         vertexColors: true,
         transparent: true,
-        opacity: 0.95,
+        opacity: 0.9,
         depthWrite: false,
         sizeAttenuation: true,
+        blending: THREE.AdditiveBlending,
       })
     );
     threeScene.add(field);
@@ -386,8 +435,8 @@ export default function RoomScene({ layout, scene }: Props) {
           depthWrite: false,
         })
       );
-      labelSprite.scale.set(0.9, 0.3, 1);
-      labelSprite.position.set(0, 0.28, 0);
+      labelSprite.scale.set(0.82, 0.27, 1);
+      labelSprite.position.set(0, 0.32, 0);
       group.add(labelSprite);
 
       // Drop to floor
@@ -441,11 +490,11 @@ export default function RoomScene({ layout, scene }: Props) {
         const mat = new THREE.MeshBasicMaterial({
           color: THEME.orangeSoft,
           transparent: true,
-          opacity: 0.35,
+          opacity: 0.28,
         });
         linkMats.current[link.link_id] = mat;
         const tube = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.012, 0.012, len, 8, 1, true),
+          new THREE.CylinderGeometry(0.009, 0.009, len, 10, 1, true),
           mat
         );
         tube.position.copy(mid);
@@ -467,16 +516,16 @@ export default function RoomScene({ layout, scene }: Props) {
       transparent: true,
       opacity: 0.92,
     });
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.14, 0.55, 6, 12), skin);
-    body.position.y = 0.95;
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.11, 14, 12), skin);
-    head.position.y = 1.45;
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.13, 0.58, 6, 14), skin);
+    body.position.y = 0.98;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.1, 14, 12), skin);
+    head.position.y = 1.48;
     const feet = new THREE.Mesh(
-      new THREE.RingGeometry(0.2, 0.27, 40),
+      new THREE.RingGeometry(0.18, 0.24, 48),
       new THREE.MeshBasicMaterial({
         color: THEME.green,
         transparent: true,
-        opacity: 0.6,
+        opacity: 0.55,
         side: THREE.DoubleSide,
         depthWrite: false,
       })
@@ -516,7 +565,7 @@ export default function RoomScene({ layout, scene }: Props) {
     function acquireShell(): Shell | null {
       let s = shellsRef.current.find((x) => !x.active);
       if (!s) {
-        if (shellsRef.current.length >= 8) return null;
+        if (shellsRef.current.length >= 6) return null;
         const mesh = new THREE.Mesh(
           shellGeo.current!,
           new THREE.MeshBasicMaterial({
@@ -578,7 +627,7 @@ export default function RoomScene({ layout, scene }: Props) {
             live.motion_score > live.motion_threshold;
           bv.led.scale.setScalar(0.9 + 0.25 * Math.sin(t * (hot ? 6.5 : 2) + i));
           bv.boardMat.emissiveIntensity = online ? (hot ? 0.28 : 0.12) : 0.03;
-          bv.labelSprite.position.y = 0.28 + Math.sin(t * 0.9 + i) * 0.015;
+          bv.labelSprite.position.y = 0.32 + Math.sin(t * 0.7 + i) * 0.01;
           if (doLabels) {
             drawLabel(bv.labelCtx, bv.labelTex, bv.boardId, bv.role, live, !!online);
           }
@@ -589,7 +638,7 @@ export default function RoomScene({ layout, scene }: Props) {
           const mat = linkMats.current[l.link_id];
           if (!mat) return;
           if (l.quality === "unavailable" || l.rssi_dbm == null) {
-            mat.opacity = 0.06;
+            mat.opacity = 0.05;
             mat.color.setHex(THEME.muted);
             return;
           }
@@ -598,31 +647,32 @@ export default function RoomScene({ layout, scene }: Props) {
             l.motion_threshold != null &&
             l.motion_score > l.motion_threshold;
           mat.opacity = hot
-            ? 0.75
-            : 0.22 + Math.min(0.4, (l.presence_score ?? 0) * 0.12);
+            ? 0.7
+            : 0.16 + Math.min(0.28, (l.presence_score ?? 0) * 0.08);
           mat.color.setHex(hot ? THEME.green : THEME.orangeSoft);
         });
 
-        // Floor signal field from measured link activity
+        // Floor signal field — damp quiet rooms so motion is the pop
         if (doField && fieldColors.current && fieldRef.current && fieldMeta.current) {
           const grid = computeFieldGrid(layout, snap.links, fieldMeta.current.nx, fieldMeta.current.ny);
           const col = tmpColor.current;
           const colors = fieldColors.current;
           const positions = fieldPos.current!;
           for (let i = 0; i < grid.values.length; i++) {
-            // Boost display gain so real scores read as a living surface
-            const s = Math.min(1.6, grid.values[i] * 1.55);
+            const raw = grid.values[i];
+            const s =
+              raw < 0.35 ? raw * 0.45 : Math.min(1.55, 0.16 + (raw - 0.35) * 1.65);
             scoreToColor(s, col);
             colors[i * 3] = col.r;
             colors[i * 3 + 1] = col.g;
             colors[i * 3 + 2] = col.b;
-            positions[i * 3 + 1] = 0.035 + Math.min(0.55, s * 0.38);
+            positions[i * 3 + 1] = 0.03 + Math.min(0.42, s * 0.28);
           }
           fieldRef.current.geometry.attributes.color.needsUpdate = true;
           fieldRef.current.geometry.attributes.position.needsUpdate = true;
         }
 
-        // TX shells from B1 when sensing is alive
+        // Shells: quiet heartbeat on TX; lively only when motion crosses threshold
         spawnAcc.current += dt;
         const txLive = snap.links.some((l) => l.rssi_dbm != null);
         const anyHot = snap.links.some(
@@ -631,7 +681,7 @@ export default function RoomScene({ layout, scene }: Props) {
             l.motion_threshold != null &&
             l.motion_score > l.motion_threshold
         );
-        if (txLive && spawnAcc.current >= (anyHot ? 0.35 : 0.9)) {
+        if (txLive && spawnAcc.current >= (anyHot ? 0.42 : 1.35)) {
           spawnAcc.current = 0;
           const b1 = boardsRef.current.find((b) => b.boardId === "b1");
           if (b1) {
@@ -640,44 +690,45 @@ export default function RoomScene({ layout, scene }: Props) {
               const live = linkForBoard(snap, "b1");
               const activity = live?.motion_score
                 ? Math.min(1.4, live.motion_score / Math.max(live.motion_threshold ?? 0.8, 0.1))
-                : 0.4;
+                : 0.35;
               shell.active = true;
               shell.t = 0;
-              shell.life = 1.2 + activity * 0.4;
-              shell.maxR = 0.9 + activity * 1.1;
+              shell.life = anyHot ? 1.15 + activity * 0.35 : 1.4;
+              shell.maxR = anyHot ? 0.85 + activity * 0.9 : 0.55;
               shell.mesh.position.copy(b1.worldPos);
-              shell.mesh.scale.setScalar(0.08);
-              shell.mesh.visible = true;
-              const mat = shell.mesh.material as THREE.MeshBasicMaterial;
-              mat.color.setHex(anyHot ? THEME.green : THEME.orange);
-              mat.opacity = 0.26;
-            }
-          }
-          // RX shells only if that receiver has data
-          boardsRef.current
-            .filter((b) => b.boardId !== "b1")
-            .forEach((bv) => {
-              const live = linkForBoard(snap, bv.boardId);
-              if (!live || live.rssi_dbm == null) return;
-              if ((live.motion_score ?? 0) < (live.motion_threshold ?? 0.8) * 0.5 && !anyHot)
-                return;
-              const shell = acquireShell();
-              if (!shell) return;
-              const activity = Math.min(
-                1.3,
-                (live.motion_score ?? 0.3) / Math.max(live.motion_threshold ?? 0.8, 0.1)
-              );
-              shell.active = true;
-              shell.t = 0;
-              shell.life = 1.0 + activity * 0.35;
-              shell.maxR = 0.55 + activity * 0.7;
-              shell.mesh.position.copy(bv.worldPos);
               shell.mesh.scale.setScalar(0.06);
               shell.mesh.visible = true;
               const mat = shell.mesh.material as THREE.MeshBasicMaterial;
-              mat.color.setHex(activity > 1 ? THEME.green : THEME.orange);
-              mat.opacity = 0.22;
-            });
+              mat.color.setHex(anyHot ? THEME.green : THEME.orange);
+              mat.opacity = anyHot ? 0.22 : 0.1;
+            }
+          }
+          if (anyHot) {
+            boardsRef.current
+              .filter((b) => b.boardId !== "b1")
+              .forEach((bv) => {
+                const live = linkForBoard(snap, bv.boardId);
+                if (!live || live.rssi_dbm == null) return;
+                if ((live.motion_score ?? 0) < (live.motion_threshold ?? 0.8) * 0.55)
+                  return;
+                const shell = acquireShell();
+                if (!shell) return;
+                const activity = Math.min(
+                  1.3,
+                  (live.motion_score ?? 0.3) / Math.max(live.motion_threshold ?? 0.8, 0.1)
+                );
+                shell.active = true;
+                shell.t = 0;
+                shell.life = 0.95 + activity * 0.3;
+                shell.maxR = 0.45 + activity * 0.55;
+                shell.mesh.position.copy(bv.worldPos);
+                shell.mesh.scale.setScalar(0.05);
+                shell.mesh.visible = true;
+                const mat = shell.mesh.material as THREE.MeshBasicMaterial;
+                mat.color.setHex(activity > 1 ? THEME.green : THEME.orange);
+                mat.opacity = 0.18;
+              });
+          }
         }
 
         const track = snap.tracks[0];
@@ -691,24 +742,27 @@ export default function RoomScene({ layout, scene }: Props) {
         if (track && avatarRef.current) {
           avatarRef.current.visible = true;
           const p = toThree(track.position.x_m, track.position.y_m, 0);
-          avatarRef.current.position.lerp(p, 0.28);
+          avatarRef.current.position.lerp(p, 0.22);
           if (track.heading_rad != null) {
             avatarRef.current.rotation.y = -track.heading_rad + Math.PI / 2;
           }
-          trailPts.current.push(p.clone());
-          if (trailPts.current.length > 60) trailPts.current.shift();
+          // Soft walk bob from motion score
+          avatarRef.current.position.y = Math.sin(t * (4 + bounce * 3)) * 0.012 * bounce;
+          trailPts.current.push(p.clone().setY(0.04));
+          if (trailPts.current.length > 48) trailPts.current.shift();
           trailRef.current!.geometry.setFromPoints(trailPts.current);
 
           personRingsRef.current.forEach((ring, i) => {
             ring.visible = true;
-            const phase = (t * (0.6 + bounce * 0.5) + i * 0.5) % 1.6;
-            ring.position.set(p.x, 0.03, p.z);
-            ring.scale.setScalar(0.4 + phase * (1.2 + bounce * 0.3));
+            const phase = (t * (0.55 + bounce * 0.45) + i * 0.55) % 1.5;
+            ring.position.set(p.x, 0.028, p.z);
+            ring.scale.setScalar(0.35 + phase * (1.05 + bounce * 0.25));
             (ring.material as THREE.MeshBasicMaterial).opacity =
-              0.4 * (1 - phase / 1.6) * Math.min(1, 0.25 + bounce * 0.5);
+              0.35 * (1 - phase / 1.5) * Math.min(1, 0.3 + bounce * 0.45);
           });
         } else if (avatarRef.current) {
           avatarRef.current.visible = false;
+          avatarRef.current.position.y = 0;
           trailPts.current = [];
           trailRef.current!.geometry.setFromPoints([]);
           personRingsRef.current.forEach((ring) => {
@@ -722,8 +776,9 @@ export default function RoomScene({ layout, scene }: Props) {
         if (!s.active) continue;
         s.t += dt;
         const k = s.t / s.life;
-        s.mesh.scale.setScalar(0.08 + k * s.maxR);
-        (s.mesh.material as THREE.MeshBasicMaterial).opacity = 0.26 * (1 - k);
+        s.mesh.scale.setScalar(0.06 + k * s.maxR);
+        const startOp = s.maxR > 0.7 ? 0.22 : 0.1;
+        (s.mesh.material as THREE.MeshBasicMaterial).opacity = startOp * (1 - k);
         if (s.t >= s.life) {
           s.active = false;
           s.mesh.visible = false;

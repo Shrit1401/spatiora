@@ -91,23 +91,29 @@ export function computeFieldGrid(
   return { nx, ny, originX: min_x, originY: min_y, cell, values };
 }
 
-/** Map relative activity → warm dark theme colors (muted → orange → green). */
+/** Map relative activity → warm dark theme colors (near-black → orange → green). */
 export function scoreToColor(s: number, out: { r: number; g: number; b: number }) {
-  const t = clamp(s, 0, 1.4) / 1.4;
-  if (t < 0.35) {
-    const u = t / 0.35;
-    out.r = 0.12 + u * 0.2;
-    out.g = 0.11 + u * 0.08;
-    out.b = 0.1 + u * 0.04;
-  } else if (t < 0.7) {
-    const u = (t - 0.35) / 0.35;
-    out.r = 0.32 + u * 0.45;
-    out.g = 0.19 + u * 0.2;
-    out.b = 0.14 + u * 0.02;
+  // Quiet floor stays almost black; color only kicks in when something is happening
+  const t = clamp(s, 0, 1.5) / 1.5;
+  if (t < 0.22) {
+    const u = t / 0.22;
+    out.r = 0.07 + u * 0.08;
+    out.g = 0.065 + u * 0.04;
+    out.b = 0.055 + u * 0.02;
+  } else if (t < 0.55) {
+    const u = (t - 0.22) / 0.33;
+    out.r = 0.15 + u * 0.55;
+    out.g = 0.1 + u * 0.18;
+    out.b = 0.075 + u * 0.04;
+  } else if (t < 0.82) {
+    const u = (t - 0.55) / 0.27;
+    out.r = 0.7 + u * 0.2;
+    out.g = 0.28 + u * 0.18;
+    out.b = 0.12 + u * 0.02;
   } else {
-    const u = (t - 0.7) / 0.3;
-    out.r = 0.77 - u * 0.4;
-    out.g = 0.39 + u * 0.42;
-    out.b = 0.16 + u * 0.2;
+    const u = (t - 0.82) / 0.18;
+    out.r = 0.9 - u * 0.55;
+    out.g = 0.46 + u * 0.35;
+    out.b = 0.14 + u * 0.22;
   }
 }

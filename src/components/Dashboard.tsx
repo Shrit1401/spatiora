@@ -360,7 +360,7 @@ export default function Dashboard() {
               <div className={styles.presenceEyebrow}>Presence</div>
               <div className={`${styles.presenceTitle} ${occ.cls}`}>{occ.title}</div>
               <div className={styles.presenceSub}>
-                {scene?.occupancy.provenance || "waiting"} ·{" "}
+                {(scene?.quality.coverage || "—").replaceAll("_", " ")} coverage ·{" "}
                 {caps?.mode || "simulation"}
               </div>
             </div>

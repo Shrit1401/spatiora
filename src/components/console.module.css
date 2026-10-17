@@ -433,11 +433,11 @@
   left: 16px;
   bottom: 40px;
   z-index: 4;
-  width: 168px;
-  padding: 10px 12px;
+  width: 156px;
+  padding: 9px 11px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--paper) 86%, transparent);
+  background: color-mix(in srgb, var(--paper) 78%, transparent);
   backdrop-filter: blur(12px);
   pointer-events: none;
 }
@@ -565,7 +565,7 @@
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 70% 55% at 50% 40%, transparent 40%, rgb(15 14 12 / 55%) 100%);
+    radial-gradient(ellipse 78% 62% at 50% 42%, transparent 48%, rgb(15 14 12 / 32%) 100%);
   z-index: 2;
 }
 
