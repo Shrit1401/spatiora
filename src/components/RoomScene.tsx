@@ -5,15 +5,27 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { LinkMetrics, RoomLayout, SceneSnapshot } from "@/lib/types";
 
-/** room_local_z_up → Three.js Y-up: (x, y, z) → (x, z, -y) */
+/** room_local_z_up → Three.js Y-up */
 function toThree(x: number, y: number, z: number): THREE.Vector3 {
   return new THREE.Vector3(x, z, -y);
 }
 
-type Props = {
-  layout: RoomLayout;
-  scene: SceneSnapshot | null;
+const C = {
+  canvas: 0x0f0e0c,
+  floor: 0x141210,
+  gridMajor: 0x3a3530,
+  gridMinor: 0x24201c,
+  paper: 0x1a1814,
+  line: 0x3d3932,
+  muted: 0x8f887c,
+  ink: 0xf0ebe3,
+  orange: 0xe8722c,
+  orangeSoft: 0xf0a06a,
+  green: 0x3ecf8e,
+  blue: 0x8a9bb0,
 };
+
+type Props = { layout: RoomLayout; scene: SceneSnapshot | null };
 
 type Shell = {
   mesh: THREE.Mesh;
@@ -25,96 +37,15 @@ type Shell = {
 
 type BoardViz = {
   boardId: string;
+  group: THREE.Group;
   led: THREE.Mesh;
+  boardMat: THREE.MeshStandardMaterial;
   chartSprite: THREE.Sprite;
   chartCtx: CanvasRenderingContext2D;
   chartTex: THREE.CanvasTexture;
   history: number[];
   worldPos: THREE.Vector3;
 };
-
-function makeChartCanvas() {
-  const cv = document.createElement("canvas");
-  cv.width = 160;
-  cv.height = 72;
-  const ctx = cv.getContext("2d")!;
-  return { cv, ctx };
-}
-
-function drawBoardChart(
-  ctx: CanvasRenderingContext2D,
-  tex: THREE.CanvasTexture,
-  boardId: string,
-  history: number[],
-  live: LinkMetrics | null,
-  online: boolean
-) {
-  const w = 160;
-  const h = 72;
-  ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = "rgba(15,14,12,0.88)";
-  ctx.strokeStyle = "rgba(61,57,50,0.9)";
-  ctx.lineWidth = 1;
-  roundRect(ctx, 0.5, 0.5, w - 1, h - 1, 6);
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.fillStyle = online ? "#c9c2b6" : "#5e584f";
-  ctx.font = "bold 11px ui-monospace, Menlo, monospace";
-  ctx.fillText(boardId.toUpperCase(), 8, 14);
-
-  if (live?.rssi_dbm != null) {
-    ctx.fillStyle = "#8f887c";
-    ctx.font = "10px ui-monospace, Menlo, monospace";
-    ctx.textAlign = "right";
-    ctx.fillText(`${live.rssi_dbm} dBm`, w - 8, 14);
-    ctx.textAlign = "left";
-  } else {
-    ctx.fillStyle = "#5e584f";
-    ctx.font = "10px ui-monospace, Menlo, monospace";
-    ctx.textAlign = "right";
-    ctx.fillText("no link", w - 8, 14);
-    ctx.textAlign = "left";
-  }
-
-  // Sparkline from real RSSI history only — gaps stay gaps
-  const vals = history.filter((v) => Number.isFinite(v));
-  if (vals.length >= 2) {
-    const min = Math.min(...vals);
-    const max = Math.max(...vals);
-    const span = max - min || 1;
-    const top = 22;
-    const bottom = h - 8;
-    ctx.strokeStyle = "#e8722c";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    history.forEach((v, i) => {
-      if (!Number.isFinite(v)) return;
-      const x = 8 + (i / Math.max(history.length - 1, 1)) * (w - 16);
-      const y = bottom - ((v - min) / span) * (bottom - top);
-      i === 0 || !Number.isFinite(history[i - 1])
-        ? ctx.moveTo(x, y)
-        : ctx.lineTo(x, y);
-    });
-    ctx.stroke();
-  } else {
-    ctx.fillStyle = "#5e584f";
-    ctx.font = "10px system-ui,sans-serif";
-    ctx.fillText("waiting for samples…", 8, 44);
-  }
-
-  // Motion bar from real score vs threshold
-  if (live?.motion_score != null && live.motion_threshold != null) {
-    const ratio = Math.min(1.5, live.motion_score / Math.max(live.motion_threshold, 0.01));
-    const bw = Math.min(w - 16, ratio * (w - 16));
-    ctx.fillStyle = "rgba(44,41,36,0.9)";
-    ctx.fillRect(8, h - 6, w - 16, 3);
-    ctx.fillStyle = ratio > 1 ? "#3ecf8e" : "#e8722c";
-    ctx.fillRect(8, h - 6, bw, 3);
-  }
-
-  tex.needsUpdate = true;
-}
 
 function roundRect(
   ctx: CanvasRenderingContext2D,
@@ -134,7 +65,6 @@ function roundRect(
 }
 
 function linkForBoard(snap: SceneSnapshot, boardId: string): LinkMetrics | null {
-  // Measured topology: b1 transmits, b2/b3 receive. Hub shows strongest live link.
   if (boardId === "b1") {
     const links = snap.links.filter((l) => l.rssi_dbm != null);
     if (!links.length) return null;
@@ -143,6 +73,107 @@ function linkForBoard(snap: SceneSnapshot, boardId: string): LinkMetrics | null 
     );
   }
   return snap.links.find((l) => l.link_id === `b1-${boardId}`) || null;
+}
+
+function drawBoardChart(
+  ctx: CanvasRenderingContext2D,
+  tex: THREE.CanvasTexture,
+  boardId: string,
+  history: number[],
+  live: LinkMetrics | null,
+  online: boolean
+) {
+  const w = 176;
+  const h = 80;
+  ctx.clearRect(0, 0, w, h);
+
+  // Soft card matching console paper
+  ctx.fillStyle = "rgba(23, 21, 18, 0.92)";
+  ctx.strokeStyle = "rgba(61, 57, 50, 0.95)";
+  ctx.lineWidth = 1.25;
+  roundRect(ctx, 1, 1, w - 2, h - 2, 8);
+  ctx.fill();
+  ctx.stroke();
+
+  // Accent hairline
+  ctx.fillStyle = online ? "rgba(232, 114, 44, 0.85)" : "rgba(94, 88, 79, 0.6)";
+  ctx.fillRect(1, 1, 3, h - 2);
+
+  ctx.fillStyle = online ? "#f0ebe3" : "#8f887c";
+  ctx.font = "600 12px ui-sans-serif, system-ui, sans-serif";
+  ctx.fillText(boardId.toUpperCase(), 12, 16);
+
+  ctx.font = "500 11px ui-monospace, Menlo, monospace";
+  ctx.textAlign = "right";
+  if (live?.rssi_dbm != null) {
+    ctx.fillStyle = "#c9c2b6";
+    ctx.fillText(`${live.rssi_dbm.toFixed(1)} dBm`, w - 10, 16);
+  } else {
+    ctx.fillStyle = "#5e584f";
+    ctx.fillText("no CSI", w - 10, 16);
+  }
+  ctx.textAlign = "left";
+
+  const vals = history.filter((v) => Number.isFinite(v));
+  const top = 24;
+  const bottom = h - 14;
+  const left = 12;
+  const right = w - 12;
+
+  if (vals.length >= 2) {
+    const min = Math.min(...vals);
+    const max = Math.max(...vals);
+    const span = max - min || 1;
+
+    // Fill under curve
+    ctx.beginPath();
+    history.forEach((v, i) => {
+      if (!Number.isFinite(v)) return;
+      const x = left + (i / Math.max(history.length - 1, 1)) * (right - left);
+      const y = bottom - ((v - min) / span) * (bottom - top);
+      if (i === 0 || !Number.isFinite(history[i - 1])) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    const lastX = left + ((history.length - 1) / Math.max(history.length - 1, 1)) * (right - left);
+    ctx.lineTo(lastX, bottom);
+    ctx.lineTo(left, bottom);
+    ctx.closePath();
+    const grad = ctx.createLinearGradient(0, top, 0, bottom);
+    grad.addColorStop(0, "rgba(232, 114, 44, 0.28)");
+    grad.addColorStop(1, "rgba(232, 114, 44, 0)");
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    ctx.strokeStyle = "#e8722c";
+    ctx.lineWidth = 1.6;
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    history.forEach((v, i) => {
+      if (!Number.isFinite(v)) return;
+      const x = left + (i / Math.max(history.length - 1, 1)) * (right - left);
+      const y = bottom - ((v - min) / span) * (bottom - top);
+      if (i === 0 || !Number.isFinite(history[i - 1])) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  } else {
+    ctx.fillStyle = "#5e584f";
+    ctx.font = "11px system-ui, sans-serif";
+    ctx.fillText("collecting samples…", 12, 48);
+  }
+
+  // Motion vs threshold — real scores only
+  if (live?.motion_score != null && live.motion_threshold != null) {
+    const ratio = Math.min(1.4, live.motion_score / Math.max(live.motion_threshold, 0.01));
+    ctx.fillStyle = "rgba(44, 41, 36, 0.95)";
+    roundRect(ctx, 12, h - 9, w - 24, 4, 2);
+    ctx.fill();
+    ctx.fillStyle = ratio > 1 ? "#3ecf8e" : "#e8722c";
+    roundRect(ctx, 12, h - 9, Math.max(2, (w - 24) * Math.min(1, ratio)), 4, 2);
+    ctx.fill();
+  }
+
+  tex.needsUpdate = true;
 }
 
 export default function RoomScene({ layout, scene }: Props) {
@@ -170,63 +201,86 @@ export default function RoomScene({ layout, scene }: Props) {
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
       powerPreference: "high-performance",
+      alpha: false,
     });
-    renderer.setClearColor(0x0f0e0c, 1);
+    renderer.setClearColor(C.canvas, 1);
     renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
     el.appendChild(renderer.domElement);
 
     const threeScene = new THREE.Scene();
-    threeScene.fog = new THREE.Fog(0x0f0e0c, 12, 28);
+    threeScene.fog = new THREE.Fog(C.canvas, 10, 26);
 
-    const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 80);
-    camera.position.set(5.5, 6.2, 7.5);
-    camera.lookAt(2, 0.8, -1.5);
+    const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 80);
+    camera.position.set(5.8, 5.6, 7.2);
+    camera.lookAt(2, 0.7, -1.5);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(2, 0.6, -1.5);
+    controls.target.set(2, 0.55, -1.5);
     controls.enableDamping = true;
-    controls.minDistance = 4;
-    controls.maxDistance = 18;
-    controls.maxPolarAngle = Math.PI * 0.45;
+    controls.dampingFactor = 0.07;
+    controls.minDistance = 4.5;
+    controls.maxDistance = 16;
+    controls.maxPolarAngle = Math.PI * 0.44;
+    controls.enablePan = false;
     controls.update();
 
-    threeScene.add(new THREE.AmbientLight(0xb8c0cc, 0.55));
-    const key = new THREE.DirectionalLight(0xffffff, 0.75);
-    key.position.set(4, 10, 3);
+    threeScene.add(new THREE.AmbientLight(0xc4b8a8, 0.45));
+    const key = new THREE.DirectionalLight(0xfff2e0, 0.7);
+    key.position.set(3, 9, 4);
     threeScene.add(key);
+    const rim = new THREE.DirectionalLight(0xe8722c, 0.18);
+    rim.position.set(-4, 3, -2);
+    threeScene.add(rim);
 
     const fb = layout.floor_bounds;
     const fw = fb.max_x - fb.min_x;
     const fd = fb.max_y - fb.min_y;
+    const cx = (fb.min_x + fb.max_x) / 2;
+    const cy = (fb.min_y + fb.max_y) / 2;
+
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(fw, fd),
-      new THREE.MeshStandardMaterial({ color: 0x171512, roughness: 0.95 })
+      new THREE.MeshStandardMaterial({
+        color: C.floor,
+        roughness: 0.92,
+        metalness: 0.05,
+      })
     );
     floor.rotation.x = -Math.PI / 2;
-    floor.position.copy(
-      toThree((fb.min_x + fb.max_x) / 2, (fb.min_y + fb.max_y) / 2, 0)
-    );
+    floor.position.copy(toThree(cx, cy, 0));
     threeScene.add(floor);
 
-    const grid = new THREE.GridHelper(Math.max(fw, fd), 10, 0x2a2824, 0x1f1c18);
+    const grid = new THREE.GridHelper(Math.max(fw, fd), 12, C.gridMajor, C.gridMinor);
     grid.position.copy(floor.position);
+    const gMat = grid.material as THREE.Material | THREE.Material[];
+    if (Array.isArray(gMat)) gMat.forEach((m) => { m.transparent = true; (m as THREE.LineBasicMaterial).opacity = 0.55; });
+    else {
+      gMat.transparent = true;
+      (gMat as THREE.LineBasicMaterial).opacity = 0.55;
+    }
     threeScene.add(grid);
 
-    // Triangle = geometry only (not a measured B2–B3 radio link)
+    // Soft floor plate edge
+    const plate = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.PlaneGeometry(fw, fd)),
+      new THREE.LineBasicMaterial({ color: C.line, transparent: true, opacity: 0.7 })
+    );
+    plate.rotation.x = -Math.PI / 2;
+    plate.position.copy(toThree(cx, cy, 0.01));
+    threeScene.add(plate);
+
+    // Triangle geometry (not a measured B2–B3 link)
     const poly = layout.monitored_polygon_xy;
-    const triPts = [...poly, poly[0]].map(([x, y]) => toThree(x, y, 0.02));
+    const triPts = [...poly, poly[0]].map(([x, y]) => toThree(x, y, 0.025));
     threeScene.add(
       new THREE.Line(
         new THREE.BufferGeometry().setFromPoints(triPts),
-        new THREE.LineBasicMaterial({
-          color: 0x5e584f,
-          transparent: true,
-          opacity: 0.55,
-        })
+        new THREE.LineBasicMaterial({ color: C.muted, transparent: true, opacity: 0.45 })
       )
     );
 
-    shellGeo.current = new THREE.SphereGeometry(1, 18, 12);
+    shellGeo.current = new THREE.SphereGeometry(1, 20, 14);
     boardsRef.current = [];
 
     layout.boards.forEach((b) => {
@@ -235,74 +289,83 @@ export default function RoomScene({ layout, scene }: Props) {
       const worldPos = toThree(x, y, z);
       g.position.copy(worldPos);
 
-      const board = new THREE.Mesh(
-        new THREE.BoxGeometry(0.12, 0.28, 0.06),
-        new THREE.MeshStandardMaterial({
-          color: 0x1a1916,
-          emissive: 0xe8722c,
-          emissiveIntensity: 0.12,
-          metalness: 0.35,
-          roughness: 0.45,
-        })
-      );
+      const boardMat = new THREE.MeshStandardMaterial({
+        color: 0x1c1a17,
+        emissive: C.orange,
+        emissiveIntensity: 0.08,
+        metalness: 0.4,
+        roughness: 0.4,
+      });
+      const board = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.3, 0.07), boardMat);
       g.add(board);
 
-      const led = new THREE.Mesh(
-        new THREE.SphereGeometry(0.03, 10, 8),
-        new THREE.MeshBasicMaterial({ color: 0x3ecf8e })
+      // subtle PCB edge
+      g.add(
+        new THREE.LineSegments(
+          new THREE.EdgesGeometry(new THREE.BoxGeometry(0.14, 0.3, 0.07)),
+          new THREE.LineBasicMaterial({ color: 0x4a453e, transparent: true, opacity: 0.8 })
+        )
       );
-      led.position.y = 0.18;
+
+      const led = new THREE.Mesh(
+        new THREE.SphereGeometry(0.028, 12, 10),
+        new THREE.MeshBasicMaterial({ color: C.green })
+      );
+      led.position.set(0.04, 0.12, 0.045);
       g.add(led);
 
-      const { cv, ctx } = makeChartCanvas();
+      const cv = document.createElement("canvas");
+      cv.width = 176;
+      cv.height = 80;
+      const ctx = cv.getContext("2d")!;
       const chartTex = new THREE.CanvasTexture(cv);
-      chartTex.needsUpdate = true;
+      chartTex.colorSpace = THREE.SRGBColorSpace;
       const chartSprite = new THREE.Sprite(
         new THREE.SpriteMaterial({
           map: chartTex,
           transparent: true,
           depthTest: false,
+          depthWrite: false,
         })
       );
-      chartSprite.scale.set(0.95, 0.43, 1);
-      chartSprite.position.set(0, 0.55, 0);
+      chartSprite.scale.set(1.05, 0.48, 1);
+      chartSprite.position.set(0, 0.58, 0);
       g.add(chartSprite);
 
-      const drop = new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints([
-          toThree(x, y, 0),
-          toThree(x, y, z),
-        ]),
-        new THREE.LineBasicMaterial({
-          color: 0x3d3932,
-          transparent: true,
-          opacity: 0.45,
-        })
+      threeScene.add(
+        new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints([
+            toThree(x, y, 0),
+            toThree(x, y, z),
+          ]),
+          new THREE.LineBasicMaterial({ color: C.line, transparent: true, opacity: 0.4 })
+        )
       );
-      threeScene.add(drop);
       threeScene.add(g);
 
       boardsRef.current.push({
         boardId: b.board_id,
+        group: g,
         led,
+        boardMat,
         chartSprite,
         chartCtx: ctx,
         chartTex,
         history: [],
         worldPos: worldPos.clone(),
       });
+      drawBoardChart(ctx, chartTex, b.board_id, [], null, true);
     });
 
-    // Only configured sensing links (b1-b2, b1-b3)
     layout.sensing_links
       .filter((l) => l.enabled)
       .forEach((link) => {
         const tx = layout.boards.find((b) => b.board_id === link.tx_board_id)!;
         const rx = layout.boards.find((b) => b.board_id === link.rx_board_id)!;
         const mat = new THREE.LineBasicMaterial({
-          color: 0x6aa3d8,
+          color: C.blue,
           transparent: true,
-          opacity: 0.4,
+          opacity: 0.35,
         });
         linkMats.current[link.link_id] = mat;
         threeScene.add(
@@ -316,34 +379,30 @@ export default function RoomScene({ layout, scene }: Props) {
         );
       });
 
-    // Avatar — only shown when provider supplies a track position
     const avatar = new THREE.Group();
     const skin = new THREE.MeshStandardMaterial({
-      color: 0x3ecf8e,
+      color: C.green,
       emissive: 0x1a5c3d,
-      emissiveIntensity: 0.25,
+      emissiveIntensity: 0.22,
+      roughness: 0.45,
+      metalness: 0.08,
       transparent: true,
-      opacity: 0.92,
+      opacity: 0.94,
     });
-    const torso = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.12, 0.14, 0.55, 12),
-      skin
-    );
+    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.13, 0.45, 6, 12), skin);
     torso.position.y = 1.05;
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 10), skin);
-    head.position.y = 1.45;
-    const legs = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.08, 0.1, 0.7, 10),
-      skin
-    );
-    legs.position.y = 0.4;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.11, 14, 12), skin);
+    head.position.y = 1.48;
+    const legs = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.65, 10), skin);
+    legs.position.y = 0.38;
     const feet = new THREE.Mesh(
-      new THREE.RingGeometry(0.22, 0.28, 36),
+      new THREE.RingGeometry(0.2, 0.28, 40),
       new THREE.MeshBasicMaterial({
-        color: 0x3ecf8e,
+        color: C.green,
         transparent: true,
-        opacity: 0.7,
+        opacity: 0.65,
         side: THREE.DoubleSide,
+        depthWrite: false,
       })
     );
     feet.rotation.x = -Math.PI / 2;
@@ -353,13 +412,12 @@ export default function RoomScene({ layout, scene }: Props) {
     threeScene.add(avatar);
     avatarRef.current = avatar;
 
-    // Floor ripples around person — presentation of measured motion, not RF path
     personRingsRef.current = [];
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 4; i++) {
       const ring = new THREE.Mesh(
-        new THREE.RingGeometry(0.15, 0.2, 48),
+        new THREE.RingGeometry(0.12, 0.16, 56),
         new THREE.MeshBasicMaterial({
-          color: 0x3ecf8e,
+          color: C.green,
           transparent: true,
           opacity: 0,
           side: THREE.DoubleSide,
@@ -374,11 +432,7 @@ export default function RoomScene({ layout, scene }: Props) {
 
     const trail = new THREE.Line(
       new THREE.BufferGeometry(),
-      new THREE.LineBasicMaterial({
-        color: 0x3ecf8e,
-        transparent: true,
-        opacity: 0.4,
-      })
+      new THREE.LineBasicMaterial({ color: C.green, transparent: true, opacity: 0.35 })
     );
     threeScene.add(trail);
     trailRef.current = trail;
@@ -386,11 +440,11 @@ export default function RoomScene({ layout, scene }: Props) {
     function acquireShell(): Shell | null {
       let s = shellsRef.current.find((x) => !x.active);
       if (!s) {
-        if (shellsRef.current.length >= 10) return null;
+        if (shellsRef.current.length >= 12) return null;
         const mesh = new THREE.Mesh(
           shellGeo.current!,
           new THREE.MeshBasicMaterial({
-            color: 0xe8722c,
+            color: C.orange,
             wireframe: true,
             transparent: true,
             opacity: 0,
@@ -425,30 +479,34 @@ export default function RoomScene({ layout, scene }: Props) {
       const snap = sceneRef.current;
 
       if (snap) {
-        // Per-board LED + chart history from real link samples only
         chartAcc.current += dt;
-        const updateCharts = chartAcc.current > 0.12;
+        const updateCharts = chartAcc.current > 0.1;
         if (updateCharts) chartAcc.current = 0;
 
         boardsRef.current.forEach((bv, i) => {
           const node = snap.nodes.find((n) => n.board_id === bv.boardId);
           const online = node?.connection === "online";
           const live = linkForBoard(snap, bv.boardId);
-          const ledMat = bv.led.material as THREE.MeshBasicMaterial;
-          ledMat.color.setHex(online ? 0x3ecf8e : 0x5e584f);
+          (bv.led.material as THREE.MeshBasicMaterial).color.setHex(
+            online ? C.green : C.muted
+          );
+          bv.boardMat.emissiveIntensity = online
+            ? 0.1 + 0.08 * Math.sin(t * 2 + i)
+            : 0.02;
 
-          const pulseRate =
+          const hot =
             live?.motion_score != null &&
             live.motion_threshold != null &&
-            live.motion_score > live.motion_threshold
-              ? 7
-              : 2.2;
-          bv.led.scale.setScalar(0.85 + 0.2 * Math.sin(t * pulseRate + i));
+            live.motion_score > live.motion_threshold;
+          bv.led.scale.setScalar(0.9 + 0.22 * Math.sin(t * (hot ? 7 : 2.2) + i));
+
+          // Gentle chart bob
+          bv.chartSprite.position.y = 0.58 + Math.sin(t * 1.1 + i) * 0.02;
 
           if (updateCharts) {
             if (live?.rssi_dbm != null) {
               bv.history.push(live.rssi_dbm);
-              if (bv.history.length > 48) bv.history.shift();
+              if (bv.history.length > 52) bv.history.shift();
             }
             drawBoardChart(
               bv.chartCtx,
@@ -461,24 +519,24 @@ export default function RoomScene({ layout, scene }: Props) {
           }
         });
 
-        // Measured link styling from real scores
         snap.links.forEach((l) => {
           const mat = linkMats.current[l.link_id];
           if (!mat) return;
           if (l.quality === "unavailable" || l.rssi_dbm == null) {
-            mat.opacity = 0.1;
-            mat.color.setHex(0x5e584f);
+            mat.opacity = 0.08;
+            mat.color.setHex(C.muted);
             return;
           }
           const hot =
             l.motion_score != null &&
             l.motion_threshold != null &&
             l.motion_score > l.motion_threshold;
-          mat.opacity = hot ? 0.9 : 0.35 + Math.min(0.35, (l.presence_score ?? 0) * 0.12);
-          mat.color.setHex(hot ? 0x3ecf8e : 0x6aa3d8);
+          mat.opacity = hot
+            ? 0.85
+            : 0.28 + Math.min(0.4, (l.presence_score ?? 0) * 0.15);
+          mat.color.setHex(hot ? C.green : C.orangeSoft);
         });
 
-        // Spawn wave shells from boards with real CSI activity
         spawnAcc.current += dt;
         const anyHot = snap.links.some(
           (l) =>
@@ -486,8 +544,7 @@ export default function RoomScene({ layout, scene }: Props) {
             l.motion_threshold != null &&
             l.motion_score > l.motion_threshold
         );
-        const interval = anyHot ? 0.35 : 0.9;
-        if (spawnAcc.current >= interval) {
+        if (spawnAcc.current >= (anyHot ? 0.32 : 0.85)) {
           spawnAcc.current = 0;
           boardsRef.current.forEach((bv) => {
             const node = snap.nodes.find((n) => n.board_id === bv.boardId);
@@ -496,34 +553,30 @@ export default function RoomScene({ layout, scene }: Props) {
             if (!live || live.rssi_dbm == null) return;
             const shell = acquireShell();
             if (!shell) return;
-            shell.active = true;
-            shell.t = 0;
             const activity = Math.min(
-              1.4,
+              1.5,
               (live.motion_score ?? 0.2) / Math.max(live.motion_threshold ?? 0.8, 0.1)
             );
-            shell.life = 1.2 + activity * 0.4;
-            shell.maxR = 0.7 + activity * 0.9;
+            shell.active = true;
+            shell.t = 0;
+            shell.life = 1.15 + activity * 0.45;
+            shell.maxR = 0.65 + activity * 0.95;
             shell.mesh.position.copy(bv.worldPos);
-            shell.mesh.scale.setScalar(0.08);
+            shell.mesh.scale.setScalar(0.06);
             shell.mesh.visible = true;
             const mat = shell.mesh.material as THREE.MeshBasicMaterial;
-            mat.color.setHex(activity > 1 ? 0x3ecf8e : 0xe8722c);
-            mat.opacity = 0.35;
+            mat.color.setHex(activity > 1 ? C.green : C.orange);
+            mat.opacity = 0.28;
           });
         }
 
-        // Person track — only if provider sent a position
         const track = snap.tracks[0];
-        const motionMax = Math.max(
-          0,
-          ...snap.links.map((l) => l.motion_score ?? 0)
-        );
+        const motionMax = Math.max(0, ...snap.links.map((l) => l.motion_score ?? 0));
         const motionTh = Math.max(
           0.01,
           ...snap.links.map((l) => l.motion_threshold ?? 0.8)
         );
-        const bounce = Math.min(1.6, motionMax / motionTh);
+        const bounce = Math.min(1.7, motionMax / motionTh);
 
         if (track && avatarRef.current) {
           avatarRef.current.visible = true;
@@ -533,18 +586,16 @@ export default function RoomScene({ layout, scene }: Props) {
             avatarRef.current.rotation.y = -track.heading_rad + Math.PI / 2;
           }
           trailPts.current.push(p.clone());
-          if (trailPts.current.length > 70) trailPts.current.shift();
+          if (trailPts.current.length > 64) trailPts.current.shift();
           trailRef.current!.geometry.setFromPoints(trailPts.current);
 
-          // Rings bounce out from floor position — amplitude from measured motion
           personRingsRef.current.forEach((ring, i) => {
             ring.visible = true;
-            const phase = (t * (0.7 + bounce * 0.6) + i * 0.55) % 1.8;
-            const s = 0.4 + phase * (1.2 + bounce);
-            ring.position.set(p.x, 0.03, p.z);
-            ring.scale.setScalar(s);
+            const phase = (t * (0.65 + bounce * 0.55) + i * 0.45) % 1.7;
+            ring.position.set(p.x, 0.028, p.z);
+            ring.scale.setScalar(0.35 + phase * (1.35 + bounce * 0.35));
             (ring.material as THREE.MeshBasicMaterial).opacity =
-              0.4 * (1 - phase / 1.8) * Math.min(1, 0.35 + bounce * 0.4);
+              0.42 * (1 - phase / 1.7) * Math.min(1, 0.3 + bounce * 0.45);
           });
         } else if (avatarRef.current) {
           avatarRef.current.visible = false;
@@ -557,13 +608,12 @@ export default function RoomScene({ layout, scene }: Props) {
         }
       }
 
-      // Expand shells
       for (const s of shellsRef.current) {
         if (!s.active) continue;
         s.t += dt;
         const k = s.t / s.life;
-        s.mesh.scale.setScalar(0.1 + k * s.maxR);
-        (s.mesh.material as THREE.MeshBasicMaterial).opacity = 0.32 * (1 - k);
+        s.mesh.scale.setScalar(0.08 + k * s.maxR);
+        (s.mesh.material as THREE.MeshBasicMaterial).opacity = 0.28 * (1 - k);
         if (s.t >= s.life) {
           s.active = false;
           s.mesh.visible = false;

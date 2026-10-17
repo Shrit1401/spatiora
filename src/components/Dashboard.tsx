@@ -47,7 +47,7 @@ function Spark({
     const w = c.width;
     const h = c.height;
     ctx.clearRect(0, 0, w, h);
-    ctx.strokeStyle = "#2c2924";
+    ctx.strokeStyle = "rgba(44,41,36,0.9)";
     ctx.beginPath();
     for (let y = 14; y < h; y += 14) {
       ctx.moveTo(0, y);
@@ -60,24 +60,36 @@ function Spark({
     const min = Math.min(...vals);
     const max = Math.max(...vals);
     const span = max - min || 1;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1.5;
-    ctx.lineJoin = "round";
-    ctx.beginPath();
-    let started = false;
+    const top = 5;
+    const bottom = h - 5;
+
+    const pts: { x: number; y: number }[] = [];
     points.forEach((p, i) => {
       const v = p[keyName];
-      if (v == null) {
-        started = false;
-        return;
-      }
-      const x = (i / Math.max(points.length - 1, 1)) * w;
-      const y = h - ((v - min) / span) * (h - 10) - 5;
-      if (!started) {
-        ctx.moveTo(x, y);
-        started = true;
-      } else ctx.lineTo(x, y);
+      if (v == null) return;
+      pts.push({
+        x: (i / Math.max(points.length - 1, 1)) * w,
+        y: bottom - ((v - min) / span) * (bottom - top),
+      });
     });
+    if (pts.length < 2) return;
+
+    ctx.beginPath();
+    pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+    ctx.lineTo(pts[pts.length - 1].x, bottom);
+    ctx.lineTo(pts[0].x, bottom);
+    ctx.closePath();
+    const g = ctx.createLinearGradient(0, top, 0, bottom);
+    g.addColorStop(0, color + "44");
+    g.addColorStop(1, color + "00");
+    ctx.fillStyle = g;
+    ctx.fill();
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.6;
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
     ctx.stroke();
   }, [points, color, keyName]);
 
@@ -169,7 +181,7 @@ export default function Dashboard() {
       }
     };
     poll();
-    const id = setInterval(poll, 200);
+    const id = setInterval(poll, 450);
     return () => {
       alive = false;
       clearInterval(id);
@@ -426,7 +438,7 @@ export default function Dashboard() {
                 <div className={styles.chartLabel}>RSSI (dBm)</div>
                 <Spark
                   points={hist[linkFocus] || []}
-                  color="#6aa3d8"
+                  color="#c9b8a4"
                   keyName="rssi_dbm"
                 />
               </div>
