@@ -428,6 +428,71 @@
   letter-spacing: 0.01em;
 }
 
+.fieldLegend {
+  position: absolute;
+  left: 16px;
+  bottom: 40px;
+  z-index: 4;
+  width: 168px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--paper) 86%, transparent);
+  backdrop-filter: blur(12px);
+  pointer-events: none;
+}
+
+.fieldLegendTitle {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.fieldLegendBar {
+  margin-top: 8px;
+  height: 5px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    #1f1c18 0%,
+    #e8722c 52%,
+    #3ecf8e 100%
+  );
+}
+
+.fieldLegendScale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+  color: var(--muted-light);
+  font-size: 10px;
+}
+
+.fieldLegendNote {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+
+.dimBadge {
+  position: absolute;
+  right: 16px;
+  bottom: 40px;
+  z-index: 4;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--paper) 86%, transparent);
+  backdrop-filter: blur(12px);
+  color: var(--muted);
+  font-family: var(--font-geist-mono), ui-monospace, Menlo, monospace;
+  font-size: 10.5px;
+  pointer-events: none;
+}
+
 /* Right rail */
 
 .rail {

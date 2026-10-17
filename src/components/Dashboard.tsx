@@ -364,6 +364,20 @@ export default function Dashboard() {
                 {caps?.mode || "simulation"}
               </div>
             </div>
+            <div className={styles.fieldLegend} aria-hidden>
+              <div className={styles.fieldLegendTitle}>Link activity field</div>
+              <div className={styles.fieldLegendBar} />
+              <div className={styles.fieldLegendScale}>
+                <span>quiet</span>
+                <span>active</span>
+              </div>
+              <div className={styles.fieldLegendNote}>
+                From measured b1→b2 / b1→b3 only · no B2–B3 RF edge
+              </div>
+            </div>
+            <div className={styles.dimBadge} aria-hidden>
+              equilateral · 4.00 m sides · boards @ 1.20 m
+            </div>
             <div className={styles.hint}>Drag to orbit · scroll to zoom</div>
           </div>
 
